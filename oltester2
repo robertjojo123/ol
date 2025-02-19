@@ -1,0 +1,262 @@
+-- ✅ **Function Forward Declarations**
+local moveTo, savePosition, returnToLastPosition, restock, placeBlock, buildSchematic, refuelTurtle
+
+-- ✅ **Position Tracking**
+local pos = {x = 0, y = 0, z = 0, dir = 0} -- 0 = +Z, 1 = +X, 2 = -Z, 3 = -X
+local lastPos = {x = 0, y = 0, z = 0, dir = 0} -- Last saved position before leaving for refuel/restock
+
+-- ✅ **Material Chest Locations (Including Oak Wood)**
+local materialChests = {
+    ["minecraft:wool"] = {x = -1, y = 0, z = -4, dir = 3}, -- Auto-fixes white_wool to minecraft:wool
+    ["minecraft:clay"] = {x = -1, y = 0, z = 0, dir = 3},
+    ["minecraft:dirt"] = {x = -1, y = 0, z = -1, dir = 3},
+    ["minecraft:grass"] = {x = -1, y = 0, z = -2, dir = 3}, -- Auto-fixes grass_block to minecraft:grass
+    ["minecraft:stone"] = {x = -1, y = 0, z = -3, dir = 3},
+    ["minecraft:log"] = {x = -1, y = 0, z = -6, dir = 3} -- Oak Wood treated as log
+}
+
+-- ✅ **Fuel Chest Location**
+local fuelChest = {x = -1, y = 0, z = -5, dir = 3} -- Fuel chest location
+local fuelItem = "projecte:aeternus_fuel_block" -- Correct fuel item
+
+-- ✅ **Block Data for Schematic (Including Oak Wood)**
+local blocks = {
+    {x=0, y=0, z=0, 'white_wool'}, -- Auto-converted to minecraft:wool
+    {x=1, y=0, z=0, 'clay'},
+    {x=2, y=0, z=0, 'dirt'},
+    {x=3, y=0, z=0, 'grass_block'}, -- Auto-converted to minecraft:grass
+    {x=4, y=0, z=0, 'stone'},
+    {x=5, y=0, z=0, 'white_wool'}, -- Auto-converted to minecraft:wool
+    {x=6, y=0, z=0, 'oak_wood'}, -- Oak Wood treated as log
+    {x=7, y=0, z=0, 'dirt'}
+}
+
+-- ✅ **Fix Block Names (Auto-Corrects White Wool, Grass Block, and Oak Wood to Log)**
+local function fixBlockName(block)
+    if block == "white_wool" then
+        return "minecraft:wool"
+    elseif block == "grass_block" then
+        return "minecraft:grass"
+    elseif block == "oak_wood" then
+        return "minecraft:log" -- Correct oak wood to minecraft:log
+    else
+        return "minecraft:" .. block
+    end
+end
+
+-- ✅ **Movement Functions with Advanced Obstacle Avoidance**
+local function tryMove(moveFunc, detectFunc, upAndOver)
+    local attempts = 0
+    while not moveFunc() do
+        -- Try to move up as long as it's possible
+        while attempts < 5 and turtle.up() do
+            pos.y = pos.y + 1
+            attempts = attempts + 1
+            if moveFunc() then
+                return true
+            end
+        end
+
+        -- If can't move up, try moving left and up (5 times)
+        for i = 1, 5 do
+            if turtle.turnLeft() then
+                if turtle.up() then
+                    pos.y = pos.y + 1
+                    if moveFunc() then
+                        return true
+                    end
+                end
+            end
+        end
+
+        -- If can't move left, try moving right and up (5 times)
+        for i = 1, 5 do
+            if turtle.turnRight() then
+                if turtle.up() then
+                    pos.y = pos.y + 1
+                    if moveFunc() then
+                        return true
+                    end
+                end
+            end
+        end
+
+        -- If all else fails, go down and try an alternate route
+        if attempts == 0 then
+            for i = 1, 5 do
+                if turtle.down() then
+                    pos.y = pos.y - 1
+                    if moveFunc() then
+                        return true
+                    end
+                end
+            end
+
+            -- Try going left 20 blocks and up 50
+            for i = 1, 20 do
+                turtle.turnLeft()
+                if not moveFunc() then
+                    return false
+                end
+            end
+            for i = 1, 50 do
+                if turtle.up() then
+                    pos.y = pos.y + 1
+                    if moveFunc() then
+                        return true
+                    end
+                end
+            end
+        end
+        print("❌ Turtle is stuck! Can't move to the desired position.")
+        return false
+    end
+    return true
+end
+
+-- ✅ **Movement Functions (Using the Above for Obstacle Avoidance)**
+local function moveForward()
+    return tryMove(turtle.forward, turtle.detect, true)
+end
+
+moveTo = function(target)
+    while pos.x ~= target.x do
+        if pos.x < target.x then while pos.dir ~= 1 do turnRight() end
+        else while pos.dir ~= 3 do turnRight() end
+        end
+        moveForward()
+    end
+    while pos.z ~= target.z do
+        if pos.z < target.z then while pos.dir ~= 0 do turnRight() end
+        else while pos.dir ~= 2 do turnRight() end
+        end
+        moveForward()
+    end
+end
+
+-- ✅ **Save and Return to Position**
+savePosition = function()
+    lastPos = {x = pos.x, y = pos.y, z = pos.z, dir = pos.dir}
+end
+
+returnToLastPosition = function()
+    moveTo(lastPos)
+    while pos.dir ~= lastPos.dir do turnRight() end
+end
+
+-- ✅ **Restock Function**
+restock = function(block)
+    local blockID = fixBlockName(block)
+    local chestPos = materialChests[blockID]
+
+    if not chestPos then
+        print("❌ ERROR: No chest found for " .. blockID)
+        return false
+    end
+
+    print("🔄 Moving to Restock " .. blockID .. " at Chest: X=" .. chestPos.x .. " Z=" .. chestPos.z)
+    
+    savePosition()
+    moveTo(chestPos)
+    while pos.dir ~= chestPos.dir do turnLeft() end
+
+    local success = false
+
+    for _ = 1, 27 do
+        if turtle.suck(64) then
+            for i = 1, 16 do
+                local item = turtle.getItemDetail(i)
+                if item and item.name == blockID then
+                    print("✅ Successfully Restocked: " .. blockID)
+                    success = true
+                    break
+                end
+            end
+        end
+        if success then break end
+    end
+
+    if not success then
+        print("❌ Out of stock: " .. blockID)
+    end
+
+    returnToLastPosition()
+    return success
+end
+
+-- ✅ **Block Placement Function**
+placeBlock = function(block)
+    if not refuelTurtle() then return false end -- Check fuel before placing
+
+    local blockID = fixBlockName(block)
+
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == blockID then
+            turtle.select(i)
+            if turtle.placeDown() then
+                print("✅ Placed " .. blockID)
+                return true
+            else
+                print("❌ Placement failed, restocking " .. blockID)
+                if restock(block) then
+                    return placeBlock(block)
+                else
+                    print("❌ Out of " .. blockID .. ", skipping.")
+                    return false
+                end
+            end
+        end
+    end
+
+    print("❌ No " .. blockID .. " found in inventory. Restocking...")
+    if restock(block) then
+        return placeBlock(block)
+    else
+        print("❌ Out of " .. blockID .. ", skipping.")
+        return false
+    end
+end
+
+-- ✅ **Refuel Function (Uses 2 Aeternus Fuel Blocks)**
+refuelTurtle = function()
+    if turtle.getFuelLevel() >= 1000 then return true end -- Skip if enough fuel
+
+    print("⛽ Low fuel! Moving to refuel.")
+
+    savePosition()
+    moveTo(fuelChest)
+    while pos.dir ~= fuelChest.dir do turnLeft() end
+
+    local refueled = 0
+    for _ = 1, 2 do -- Attempt to grab and use 2 Aeternus Fuel Blocks
+        if turtle.suck(1) then
+            turtle.refuel()
+            refueled = refueled + 1
+        end
+    end
+
+    if refueled > 0 then
+        print("✅ Refueled with " .. refueled .. " Aeternus Fuel Blocks.")
+    else
+        print("❌ Fuel chest is empty! Build halted.")
+        return false
+    end
+
+    returnToLastPosition()
+    return true
+end
+
+-- ✅ **Build Process**
+buildSchematic = function()
+    for _, blockData in ipairs(blocks) do
+        moveTo(blockData)
+        while not placeBlock(blockData[1]) do
+            print("🔄 Retrying placement of " .. blockData[1] .. " after restock")
+        end
+    end
+    print("✅ Build completed successfully!")
+end
+
+-- ✅ **Start the Build**
+buildSchematic()
