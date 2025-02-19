@@ -20,7 +20,6 @@ local fuelItem = "projecte:aeternus_fuel_block" -- Correct fuel item
 
 -- ✅ **Block Data for Schematic**
 local blocks = {
-    return {
 {x=0, y=0, z=0, 'white_wool'},
 {x=0, y=0, z=1, 'white_wool'},
 {x=0, y=0, z=2, 'white_wool'},
