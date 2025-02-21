@@ -1,0 +1,62 @@
+-- Configurations
+local baseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus/refs/heads/main/output_"
+local totalFiles = 122 -- Number of files to process
+local startupFile = "startup.lua" -- The file to copy into each Turtle
+local turtleSide = "right" -- The side where Turtles will be placed
+
+local fileCounter = 1 -- Keeps track of the next file to assign
+
+print("Waiting for Turtles to be placed to the right...")
+
+while fileCounter <= totalFiles do
+    -- Wait until a Turtle is placed
+    while not peripheral.isPresent(turtleSide) or peripheral.getType(turtleSide) ~= "turtle" do
+        sleep(1) -- Check every second
+    end
+
+    print("Turtle detected! Assigning output_" .. fileCounter .. ".lua")
+
+    -- Define file paths
+    local fileName = "output_" .. fileCounter .. ".lua"
+    local fileUrl = baseUrl .. fileCounter .. ".lua"
+    local turtleStartupPath = turtleSide .. "/startup.lua"
+
+    -- Create a custom startup script on the Turtle
+    local startupScript = [[
+shell.run("wget ]] .. fileUrl .. [[ output.lua")
+shell.run("startup_turtle.lua") -- Run the provided script
+]]
+
+    -- Write startup script directly onto the Turtle
+    local file = fs.open(turtleStartupPath, "w")
+    file.write(startupScript)
+    file.close()
+
+    print("Created startup script on Turtle")
+
+    -- Copy the extra startup logic file (startup_turtle.lua)
+    if fs.exists(startupFile) then
+        fs.copy(startupFile, turtleSide .. "/startup_turtle.lua")
+        print("Copied " .. startupFile .. " to Turtle")
+    else
+        print("ERROR: " .. startupFile .. " not found!")
+        return
+    end
+
+    -- Start the Turtle by rebooting it
+    peripheral.call(turtleSide, "turnOn")
+
+    print("Turtle started with its assigned file!")
+
+    -- Move to the next file for the next Turtle
+    fileCounter = fileCounter + 1
+
+    -- Wait for the Turtle to be removed before continuing
+    while peripheral.isPresent(turtleSide) do
+        sleep(1)
+    end
+
+    print("Turtle removed. Ready for next one.")
+end
+
+print("All files assigned!")
