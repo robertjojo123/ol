@@ -1,0 +1,113 @@
+local json = require("json") -- JSON library for saving/loading progress
+
+-- ✅ Position Tracking
+local pos = {x = 0, y = 0, z = 0, dir = 0} -- Turtle's absolute position
+local lastPlacedIndex = 1 -- Tracks last placed block
+local referencePoint = nil -- Build start reference (absolute coords)
+
+-- ✅ Absolute Coordinates for Material & Fuel Chests (Dynamically Calculated)
+local function calculateStoragePositions()
+    if referencePoint then
+        return {
+            fuelChest = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2}, -- Fuel is 2 blocks behind
+            materialChests = {
+                ["minecraft:wool"]  = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2},
+                ["minecraft:clay"]  = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2},
+                ["minecraft:dirt"]  = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2},
+                ["minecraft:grass"] = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2},
+                ["minecraft:stone"] = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2},
+                ["minecraft:log"]   = {x = referencePoint.x, y = referencePoint.y, z = referencePoint.z - 2, dir = 2}
+            }
+        }
+    end
+    return nil
+end
+
+-- ✅ Save Reference Start Position
+local function saveReferencePoint()
+    local file = fs.open("reference.json", "w")
+    file.write(json.encode(pos))
+    file.close()
+end
+
+-- ✅ Load Reference Start Position
+local function loadReferencePoint()
+    if fs.exists("reference.json") then
+        local file = fs.open("reference.json", "r")
+        local data = file.readAll()
+        file.close()
+        referencePoint = json.decode(data)
+    end
+end
+
+-- ✅ GPS Movement Functions
+local function moveTo(target)
+    while pos.x ~= target.x do
+        if pos.x < target.x then while pos.dir ~= 1 do turtle.turnRight() end
+        else while pos.dir ~= 3 do turtle.turnRight() end
+        end
+        turtle.forward()
+    end
+    while pos.z ~= target.z do
+        if pos.z < target.z then while pos.dir ~= 0 do turtle.turnRight() end
+        else while pos.dir ~= 2 do turtle.turnRight() end
+        end
+        turtle.forward()
+    end
+    while pos.y < target.y do turtle.up() end
+    while pos.y > target.y do turtle.down() end
+end
+
+-- ✅ Restock Function (Takes 2 Stacks)
+local function restock(block)
+    local storage = calculateStoragePositions()
+    if not storage then return false end
+
+    local chestPos = storage.materialChests[block]
+    if not chestPos then return false end
+
+    savePosition()
+    moveTo(chestPos)
+
+    local restocked = 0
+    for _ = 1, 2 do
+        if turtle.suck(64) then restocked = restocked + 1 else break end
+    end
+
+    returnToLastPosition()
+    return restocked > 0
+end
+
+-- ✅ Refuel Turtle (Fuel Chest is 2 Blocks Behind)
+local function refuelTurtle()
+    if turtle.getFuelLevel() >= 1000 then return true end
+
+    local storage = calculateStoragePositions()
+    if not storage then return false end
+
+    savePosition()
+    moveTo(storage.fuelChest)
+
+    local refueled = 0
+    for _ = 1, 2 do
+        if turtle.suck(1) then turtle.refuel() refueled = refueled + 1 end
+    end
+
+    returnToLastPosition()
+    return refueled > 0
+end
+
+-- ✅ Start Build Process
+local function start()
+    loadReferencePoint()
+
+    if not referencePoint then
+        moveTo({x = pos.x, y = pos.y, z = pos.z + 3}) -- Move forward to set build start
+        saveReferencePoint()
+    end
+
+    -- Start building
+    buildSchematic("output.lua")
+end
+
+start()
