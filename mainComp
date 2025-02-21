@@ -1,0 +1,65 @@
+-- Configurations
+local baseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus/refs/heads/main/output_"
+local saveDir = "output_" -- Prefix for downloaded files
+local turtleSide = "right" -- Change this if your Turtle is on a different side
+local extraFile = "extra_file.lua" -- The extra file to copy to each Turtle
+local totalFiles = 153 -- Number of files to process
+
+-- Function to transfer files to Turtle
+local function transferToTurtle(filename)
+    if not peripheral.isPresent(turtleSide) or peripheral.getType(turtleSide) ~= "turtle" then
+        print("No Turtle detected on " .. turtleSide)
+        return false
+    end
+
+    -- Move file to Turtle
+    local turtlePath = turtleSide .. "/" .. filename
+    if fs.exists(turtlePath) then
+        print("File already exists on Turtle: " .. filename)
+        return true -- No need to move again
+    end
+
+    fs.move(filename, turtlePath)
+    print("Transferred " .. filename .. " to Turtle")
+
+    -- Copy extra file to Turtle if it exists
+    if fs.exists(extraFile) then
+        fs.copy(extraFile, turtleSide .. "/" .. extraFile)
+        print("Copied " .. extraFile .. " to Turtle")
+    else
+        print("Extra file not found: " .. extraFile)
+    end
+
+    return true
+end
+
+-- Main loop to process files
+for i = 1, totalFiles do
+    local fileName = saveDir .. i .. ".lua"
+    local fileUrl = baseUrl .. i .. ".lua"
+
+    -- Download file if it does not exist
+    if not fs.exists(fileName) then
+        print("Downloading: " .. fileUrl)
+        shell.run("wget " .. fileUrl .. " " .. fileName)
+
+        if not fs.exists(fileName) then
+            print("Download failed: " .. fileName)
+            goto continue -- Skip to next iteration
+        end
+    else
+        print("File already downloaded: " .. fileName)
+    end
+
+    -- Transfer file to Turtle
+    if transferToTurtle(fileName) then
+        print("Processing complete for " .. fileName)
+    else
+        print("Failed to transfer " .. fileName .. " to Turtle")
+    end
+
+    ::continue:: -- Skip to next file
+    sleep(2) -- Prevent spam
+end
+
+print("All files processed!")
