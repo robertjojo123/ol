@@ -1,0 +1,58 @@
+-- ✅ Placer Turtle Settings
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    while turtle.detect() do
+        print("⏳ Waiting for previous Worker Turtle to be removed...")
+        sleep(2)
+    end
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait until there's space
+    waitForTurtleRemoval()
+
+    -- Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- ✅ Create a file inside the Worker Turtle to store its assigned block data index
+    local indexFile = fs.open("front/block_data_index.txt", "w")
+    indexFile.write(tostring(turtleIndex))
+    indexFile.close()
+
+    -- ✅ Tell Worker Turtle to copy `startup.lua` from Disk Drive
+    print("📂 Instructing Worker Turtle to copy `startup.lua`...")
+    local startupCommand = "cp /disk/startup.lua /startup"
+    local commandFile = fs.open("front/worker_command.lua", "w")
+    commandFile.write(startupCommand)
+    commandFile.close()
+
+    -- ✅ Tell Worker Turtle to reboot
+    print("🔄 Instructing Worker Turtle to reboot...")
+    local rebootCommand = "os.reboot()"
+    local rebootFile = fs.open("front/worker_command.lua", "a") -- Append to existing file
+    rebootFile.write("\n" .. rebootCommand)
+    rebootFile.close()
+
+    print("✅ Worker Turtle setup complete!")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is now running! Waiting for removal before placing the next one...")
+    waitForTurtleRemoval() -- Wait before placing the next Turtle
+end
+
+print("🎉 All Worker Turtles deployed!")
