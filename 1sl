@@ -1,0 +1,109 @@
+-- ✅ Debugging Startup
+print("🚀 Worker Turtle Booting Up...")
+
+-- ✅ Function: Get the correct block data index
+local function getBlockDataIndex()
+    local filename = "block_data_index.txt"
+    local attempts = 0
+
+    while not fs.exists(filename) do
+        print("⏳ Waiting for `block_data_index.txt`...")
+        sleep(1)
+        attempts = attempts + 1
+        if attempts > 30 then
+            print("❌ ERROR: `block_data_index.txt` still not found after 30 seconds! Retrying...")
+            sleep(3) -- Wait before retrying
+            attempts = 0 -- Reset counter
+        end
+    end
+
+    local file = fs.open(filename, "r")
+    local index = tonumber(file.readAll())
+    file.close()
+
+    if not index then
+        print("❌ ERROR: `block_data_index.txt` is corrupt!")
+        sleep(3)
+        os.shutdown()
+    end
+
+    print("📂 Block Data Index:", index)
+    return index
+end
+
+-- ✅ Function: Download `output.lua` if missing
+local function checkForOutputFile()
+    if not fs.exists("output.lua") then
+        print("📥 `output.lua` missing, downloading...")
+
+        local index = getBlockDataIndex()
+        local blockDataBaseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+        shell.run("wget " .. blockDataBaseUrl .. index .. ".lua output.lua")
+
+        if not fs.exists("output.lua") then
+            print("❌ ERROR: Failed to download `output.lua`! Shutting down.")
+            sleep(3)
+            os.shutdown()
+        else
+            print("✅ Successfully downloaded `output.lua`!")
+        end
+    else
+        print("✅ `output.lua` detected!")
+    end
+end
+
+-- ✅ Function: Load Block Data
+local function loadBlockData()
+    checkForOutputFile()
+    print("📥 Loading `output.lua`...")
+
+    local chunk = loadfile("output.lua")
+    if chunk then
+        local success, data = pcall(chunk)
+        if success and type(data) == "table" then
+            print("✅ Block data loaded successfully!")
+            return data
+        end
+    end
+
+    print("❌ ERROR: Could not load output.lua")
+    sleep(3)
+    os.shutdown()
+    return nil
+end
+
+-- ✅ Build Process
+local function buildSchematic(data)
+    if not data or #data == 0 then
+        print("❌ ERROR: Block data is empty!")
+        sleep(3)
+        os.shutdown()
+        return
+    end
+
+    print("🛠️ Starting Build Process...")
+    for _, block in ipairs(data) do
+        print("🔨 Placing:", block.block, "at", block.x, block.y, block.z)
+        -- Movement and placement logic here
+    end
+
+    print("✅ Build complete!")
+end
+
+-- ✅ Start Build Process
+local function startBuild()
+    print("🚀 Starting Build Process...")
+    local blockData = loadBlockData()
+    if blockData then
+        buildSchematic(blockData)
+    else
+        print("❌ ERROR: No valid block data found!")
+        sleep(3)
+        os.shutdown()
+    end
+
+    print("🔴 Build complete. Shutting down...")
+    os.shutdown()
+end
+
+startBuild()
