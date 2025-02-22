@@ -1,0 +1,80 @@
+-- ✅ Placer Turtle Settings
+local blockDataBaseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    while turtle.detect() do
+        print("⏳ Waiting for previous Worker Turtle to be removed...")
+        sleep(2)
+    end
+end
+
+-- ✅ Function: Send Command to Worker Turtle
+local function runCommandOnWorker(command)
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: Worker Turtle not detected!")
+        return false
+    end
+    print("🖥️ Running command: " .. command)
+    worker.run(command)
+    return true
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait until there's space
+    waitForTurtleRemoval()
+
+    -- Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- Wrap the Worker Turtle and confirm it exists
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: Could not detect placed Worker Turtle!")
+        return
+    end
+
+    -- ✅ Tell Worker Turtle to `wget` the correct `output_X.lua`
+    print("📥 Telling Worker Turtle to download block data...")
+    if not runCommandOnWorker("wget " .. blockDataBaseUrl .. turtleIndex .. ".lua output.lua") then
+        print("❌ ERROR: Worker Turtle failed to download `output_" .. turtleIndex .. ".lua`")
+        return
+    end
+
+    -- ✅ Tell Worker Turtle to copy `startup.lua` from Disk Drive
+    print("📂 Telling Worker Turtle to copy `startup.lua`...")
+    if not runCommandOnWorker("cp /disk/startup.lua /startup") then
+        print("❌ ERROR: Worker Turtle failed to copy `startup.lua` from Disk!")
+        return
+    end
+
+    -- ✅ Tell Worker Turtle to reboot
+    print("🔄 Rebooting Worker Turtle...")
+    if not runCommandOnWorker("reboot") then
+        print("❌ ERROR: Worker Turtle failed to reboot!")
+        return
+    end
+
+    print("✅ Worker Turtle setup complete!")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is now running! Waiting for removal before placing the next one...")
+    waitForTurtleRemoval() -- Wait before placing the next Turtle
+end
+
+print("🎉 All Worker Turtles deployed!")
