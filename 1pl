@@ -1,0 +1,94 @@
+-- ✅ Placer Turtle Settings
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    print("⏳ Waiting for previous Worker Turtle to be removed...")
+    while turtle.detect() do
+        sleep(2)
+    end
+    print("✅ Worker Turtle removed! Placing next one.")
+end
+
+-- ✅ Function: Write a File to the Worker Turtle
+local function writeToWorker(filePath, content)
+    local file = fs.open("front/" .. filePath, "w")
+    if file then
+        file.write(content)
+        file.close()
+        sleep(0.5) -- Small delay to ensure the file system registers the new file
+        return true
+    else
+        print("❌ ERROR: Failed to write `" .. filePath .. "` to Worker Turtle!")
+        return false
+    end
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait until there's space
+    waitForTurtleRemoval()
+
+    -- Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- ✅ Ensure Worker Turtle exists before proceeding
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: Worker Turtle not detected! Aborting...")
+        return
+    end
+
+    -- ✅ Write `block_data_index.txt` inside Worker Turtle
+    print("📂 Assigning Block Data Index:", turtleIndex)
+    if not writeToWorker("block_data_index.txt", tostring(turtleIndex)) then
+        print("❌ ERROR: Failed to assign Block Data Index!")
+        return
+    end
+
+    -- ✅ Ensure the file exists before rebooting
+    sleep(1) -- Ensure file system saves properly
+    if not fs.exists("front/block_data_index.txt") then
+        print("❌ ERROR: `block_data_index.txt` did not get written correctly! Aborting.")
+        return
+    end
+
+    print("✅ `block_data_index.txt` confirmed on Worker Turtle!")
+
+    -- ✅ Copy `startup.lua` from Disk Drive
+    print("📂 Copying `startup.lua` to Worker Turtle...")
+    if not fs.exists("/disk/startup.lua") then
+        print("❌ ERROR: `startup.lua` missing from Disk Drive!")
+        return
+    end
+
+    local startupContent = fs.open("/disk/startup.lua", "r").readAll()
+    if not writeToWorker("startup", startupContent) then
+        print("❌ ERROR: Failed to copy `startup.lua`!")
+        return
+    end
+
+    -- ✅ Reboot Worker Turtle
+    print("🔄 Rebooting Worker Turtle...")
+    sleep(1) -- Give it time to register files
+    worker.turnOn() -- Turns on the Worker Turtle
+
+    print("✅ Worker Turtle setup complete!")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is now running! Waiting for removal before placing the next one...")
+end
+
+print("🎉 All Worker Turtles deployed!")
