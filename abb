@@ -1,0 +1,157 @@
+-- ✅ **Function Forward Declarations** 
+local moveTo, savePosition, returnToLastPosition, restock, placeBlock, buildSchematic, refuelTurtle, downloadBlockData
+
+-- ✅ **Position Tracking**
+local pos = {x = 0, y = 0, z = 0, dir = 0} -- 0 = +Z (North), 1 = +X (East), 2 = -Z (South), 3 = -X (West)
+local lastPos = {x = 0, y = 0, z = 0, dir = 0} -- Last saved position before refuel/restock
+local lastPlacedIndex = 1 -- Tracks last placed block
+
+-- ✅ **Stacked Material Chest System (Smart Restocking)**
+local materialChests = {
+    ["minecraft:wool"]  = {{x = -9, y = 0, z = -4, dir = 2}, {x = -9, y = 1, z = -4, dir = 2}},
+    ["minecraft:clay"]  = {{x = -9, y = 2, z = -4, dir = 2}, {x = -9, y = 3, z = -4, dir = 2}},
+    ["minecraft:dirt"]  = {{x = -9, y = 4, z = -4, dir = 2}, {x = -9, y = 5, z = -4, dir = 2}},
+    ["minecraft:grass"] = {{x = -9, y = 6, z = -4, dir = 2}, {x = -9, y = 7, z = -4, dir = 2}},
+    ["minecraft:stone"] = {{x = -9, y = 8, z = -4, dir = 2}, {x = -9, y = 9, z = -4, dir = 2}}
+}
+
+-- ✅ **Fuel Chest Location**
+local fuelChest = {x = -9, y = -1, z = -4, dir = 2} 
+local fuelItem = "projecte:aeternus_fuel_block"
+
+-- ✅ **Fix Block Names**
+local function fixBlockName(block)
+    return "minecraft:" .. block
+end
+
+-- ✅ **Movement Functions**
+local function turnLeft() turtle.turnLeft() pos.dir = (pos.dir - 1) % 4 end
+local function turnRight() turtle.turnRight() pos.dir = (pos.dir + 1) % 4 end
+local function moveForward()
+    if turtle.forward() then
+        if pos.dir == 0 then pos.z = pos.z + 1
+        elseif pos.dir == 1 then pos.x = pos.x + 1
+        elseif pos.dir == 2 then pos.z = pos.z - 1
+        elseif pos.dir == 3 then pos.x = pos.x - 1
+        end
+        return true
+    end
+    return false
+end
+
+moveTo = function(target)
+    while pos.x ~= target.x do
+        if pos.x < target.x then while pos.dir ~= 1 do turnRight() end
+        else while pos.dir ~= 3 do turnRight() end
+        end
+        moveForward()
+    end
+    while pos.z ~= target.z do
+        if pos.z < target.z then while pos.dir ~= 0 do turnRight() end
+        else while pos.dir ~= 2 do turnRight() end
+        end
+        moveForward()
+    end
+end
+
+-- ✅ **Save and Return to Position**
+savePosition = function() lastPos = {x = pos.x, y = pos.y, z = pos.z, dir = pos.dir} end
+returnToLastPosition = function() moveTo(lastPos); while pos.dir ~= lastPos.dir do turnRight() end end
+
+-- ✅ **Restock Function (Smart Chest Selection)**
+restock = function(block)
+    local blockID = fixBlockName(block)
+    local chests = materialChests[blockID]
+
+    if not chests then return false end
+
+    savePosition()
+
+    for _, chest in ipairs(chests) do
+        moveTo(chest)
+        while pos.dir ~= chest.dir do turnLeft() end
+        if turtle.suck(64) then returnToLastPosition(); return true end
+    end
+
+    returnToLastPosition()
+    return false
+end
+
+-- ✅ **Block Placement Function**
+placeBlock = function(block)
+    if not refuelTurtle() then return false end 
+    local blockID = fixBlockName(block)
+
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == blockID then
+            turtle.select(i)
+            if turtle.placeDown() then moveForward(); return true end
+        end
+    end
+
+    if restock(block) then return placeBlock(block) end
+    return false
+end
+
+-- ✅ **Refuel Function (Uses Aeternus Fuel Blocks)**
+refuelTurtle = function()
+    if turtle.getFuelLevel() >= 1000 then return true end 
+
+    savePosition()
+    moveTo(fuelChest)
+    while pos.dir ~= fuelChest.dir do turnLeft() end
+
+    for _ = 1, 2 do
+        if turtle.suck(1) then 
+            local item = turtle.getItemDetail()
+            if item and item.name == fuelItem then
+                turtle.refuel()
+            end
+        end
+    end
+
+    returnToLastPosition()
+    return turtle.getFuelLevel() >= 1000
+end
+
+-- ✅ **Build Process**
+buildSchematic = function(fileName)
+    if not fs.exists(fileName) then return end
+
+    local chunk = loadfile(fileName)
+    local success, data = pcall(chunk)
+    if not success then return end
+
+    for i = lastPlacedIndex, #data do
+        if not placeBlock(data[i].block) then return end
+        lastPlacedIndex = i + 1
+        local file = fs.open("progress.json", "w")
+        file.write(textutils.serialize({ lastPlacedIndex = lastPlacedIndex }))
+        file.close()
+    end
+end
+
+-- ✅ **Function to Download and Process Block Data**
+downloadBlockData = function()
+    for i = lastPlacedIndex, 122 do
+        local fileName = "output.lua"
+        local fileUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_" .. i .. ".lua"
+
+        if fs.exists(fileName) then fs.delete(fileName) end
+
+        shell.run("wget", fileUrl, fileName)
+        if fs.exists(fileName) then buildSchematic(fileName) else return end
+    end
+end
+
+-- ✅ **Load Progress Before Starting**
+if fs.exists("progress.json") then
+    local file = fs.open("progress.json", "r")
+    local data = textutils.unserialize(file.readAll())
+    file.close()
+    lastPlacedIndex = data.lastPlacedIndex or 1
+end
+
+-- ✅ **Start the Build Process**
+downloadBlockData()
