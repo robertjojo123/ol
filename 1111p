@@ -1,0 +1,50 @@
+-- ✅ Open Rednet on a modem (Ensure a wireless modem is attached)
+rednet.open("right") -- Change "right" to the correct side of the modem
+
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    print("⏳ Waiting for previous Worker Turtle to be removed...")
+    while turtle.detect() do
+        sleep(2)
+    end
+    print("✅ Worker Turtle removed! Placing next one.")
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait for space before placing
+    waitForTurtleRemoval()
+
+    -- ✅ Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- ✅ Turn On Worker Turtle
+    print("🔄 Turning on Worker Turtle...")
+    peripheral.call("front", "turnOn") -- Powering up the placed Worker Turtle
+
+    -- ✅ Convert `turtleIndex` to a String Before Sending
+    local indexString = tostring(turtleIndex)
+    print("📡 Sending Block Data Index:", indexString)
+    rednet.broadcast(indexString, "block_data_index") -- Sending as a string with a protocol
+
+    print("✅ Worker Turtle setup complete!")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is running! Waiting for removal before placing the next one...")
+end
+
+print("🎉 All Worker Turtles deployed!")
