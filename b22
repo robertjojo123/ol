@@ -1,0 +1,58 @@
+-- Configuration
+local turtleSlot = 1  -- Slot containing new Worker Turtles
+local placeDirection = "front"  -- Direction where Turtles will be placed
+local maxTurtles = 122  -- Total Worker Turtles to deploy
+
+print("🚀 Starting Turtle deployment for " .. maxTurtles .. " Worker Turtles.")
+
+for i = 1, maxTurtles do
+    -- Select Turtle in inventory
+    turtle.select(turtleSlot)
+
+    -- Check if there are enough Turtles left
+    if turtle.getItemCount(turtleSlot) == 0 then
+        print("❌ No more Worker Turtles available!")
+        break
+    end
+
+    -- Wait until the previous Turtle is removed before placing the next one
+    while peripheral.find("turtle") do
+        print("⏳ Waiting for previous Turtle to finish setup...")
+        sleep(1)
+    end
+
+    -- Place the new Worker Turtle
+    if turtle.place() then
+        print("✅ Placed Worker Turtle #" .. i)
+
+        -- Wait briefly for peripherals to register
+        sleep(1)
+
+        -- Turn on the Worker Turtle
+        local workerTurtle = peripheral.find("turtle")
+        if workerTurtle then
+            print("🔌 Booting Worker Turtle #" .. i)
+            peripheral.call(peripheral.getName(workerTurtle), "turnOn")
+        else
+            print("❌ ERROR: Failed to detect placed Turtle!")
+        end
+
+        -- Confirm the Worker Turtle is running
+        print("⏳ Worker Turtle #" .. i .. " is processing.")
+
+        -- Wait for the Worker Turtle to finish setup before placing the next one
+        while peripheral.find("turtle") do
+            print("⏳ Waiting for Worker Turtle #" .. i .. " to complete setup...")
+            sleep(1)
+        end
+
+        print("✅ Worker Turtle #" .. i .. " has completed setup. Placing next one.")
+
+        sleep(2)  -- Short delay before placing the next Turtle
+    else
+        print("❌ ERROR: Failed to place Worker Turtle. Is the space occupied?")
+        sleep(2) -- Wait before retrying
+    end
+end
+
+print("🎉 All Worker Turtles have been deployed!")
