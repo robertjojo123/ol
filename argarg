@@ -1,0 +1,187 @@
+-- ✅ Open Rednet to receive the block data index
+rednet.open("right") -- Change "right" to the correct side of the modem
+
+-- ✅ Position Tracking
+local pos = {x = -5, y = 0, z = 0, dir = 0}
+local lastPlacedIndex = 1
+local lastPos = {x = 0, y = 0, z = 0, dir = 0} -- Store last position before restocking
+
+-- ✅ Fuel & Material Chest Locations
+local fuelChest = {x = -9, y = -1, z = -4} 
+local fuelItem = "projecte:aeternus_fuel_block"
+
+local materialChests = {
+    ["minecraft:wool"]  = {{x = -9, y = 0, z = -4}, {x = -9, y = 1, z = -4}},
+    ["minecraft:clay"]  = {{x = -9, y = 2, z = -4}, {x = -9, y = 3, z = -4}},
+    ["minecraft:dirt"]  = {{x = -9, y = 4, z = -4}, {x = -9, y = 5, z = -4}}
+}
+
+-- ✅ Save and Restore Position
+local function savePosition()
+    lastPos = {x = pos.x, y = pos.y, z = pos.z, dir = pos.dir}
+end
+
+local function returnToLastPosition()
+    moveTo(lastPos)
+    while pos.dir ~= lastPos.dir do
+        turtle.turnRight()
+    end
+end
+
+-- ✅ Move to Target Position
+local function moveTo(target)
+    while pos.x ~= target.x do
+        if pos.x < target.x then turtle.turnRight() else turtle.turnLeft() end
+        if turtle.forward() then pos.x = pos.x + (pos.dir == 1 and 1 or -1) end
+    end
+
+    while pos.z ~= target.z do
+        if pos.z < target.z then turtle.turnLeft() else turtle.turnRight() end
+        if turtle.forward() then pos.z = pos.z + (pos.dir == 0 and 1 or -1) end
+    end
+
+    print("✅ Arrived at target.")
+    return true
+end
+
+-- ✅ Moves to Each Adjacent Position to Access Chest
+local function accessChest(chestPos)
+    local accessPoints = {
+        {x = chestPos.x + 1, y = chestPos.y, z = chestPos.z}, -- Right
+        {x = chestPos.x - 1, y = chestPos.y, z = chestPos.z}, -- Left
+        {x = chestPos.x, y = chestPos.y, z = chestPos.z + 1}, -- Front
+        {x = chestPos.x, y = chestPos.y, z = chestPos.z - 1}  -- Back
+    }
+
+    for _, point in ipairs(accessPoints) do
+        moveTo(point)
+
+        -- Face the chest
+        if point.x > chestPos.x then while pos.dir ~= 3 do turtle.turnRight() end end -- Facing Left
+        if point.x < chestPos.x then while pos.dir ~= 1 do turtle.turnRight() end end -- Facing Right
+        if point.z > chestPos.z then while pos.dir ~= 2 do turtle.turnRight() end end -- Facing Back
+        if point.z < chestPos.z then while pos.dir ~= 0 do turtle.turnRight() end end -- Facing Front
+
+        -- Try to access chest
+        if turtle.suck(64) then
+            print("✅ Accessed chest successfully!")
+            return true
+        end
+    end
+
+    print("❌ ERROR: Chest access failed, all sides blocked.")
+    return false
+end
+
+-- ✅ Refuel Turtle
+local function refuelTurtle()
+    if turtle.getFuelLevel() >= 1000 then return true end
+
+    savePosition()
+    moveTo(fuelChest)
+
+    if accessChest(fuelChest) then
+        print("✅ Refueled successfully!")
+    else
+        print("❌ ERROR: Fuel chest empty or blocked!")
+    end
+
+    returnToLastPosition()
+    return turtle.getFuelLevel() >= 1000
+end
+
+-- ✅ Smart Restock Function (Moves to Different Chest Sides)
+local function restock(block)
+    local chests = materialChests["minecraft:" .. block]
+    if not chests then
+        print("❌ ERROR: No chest found for " .. block)
+        return false
+    end
+
+    savePosition()
+
+    for _, chest in ipairs(chests) do
+        if accessChest(chest) then
+            print("✅ Restocked " .. block .. " from chest!")
+            returnToLastPosition()
+            return true
+        end
+    end
+
+    print("❌ ERROR: Out of " .. block .. " in all chests.")
+    returnToLastPosition()
+    return false
+end
+
+-- ✅ Place Block Function
+local function placeBlock(block)
+    if not restock(block) then return false end
+
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == "minecraft:" .. block then
+            turtle.select(i)
+            if turtle.placeDown() then
+                print("✅ Placed " .. block)
+                return true
+            end
+        end
+    end
+
+    print("❌ ERROR: Could not place " .. block)
+    return false
+end
+
+-- ✅ Load Block Data
+local function loadBlockData()
+    print("📥 Loading `output.lua`...")
+
+    local chunk = loadfile("output.lua")
+    if chunk then
+        local success, data = pcall(chunk)
+        if success and type(data) == "table" then
+            print("✅ Block data loaded successfully!")
+            return data
+        end
+    end
+
+    print("❌ ERROR: Could not load `output.lua`")
+    sleep(3)
+    os.shutdown()
+    return nil
+end
+
+-- ✅ Build Process
+local function buildSchematic(data)
+    if not data or #data == 0 then
+        print("❌ ERROR: Block data is empty!")
+        sleep(3)
+        os.shutdown()
+        return
+    end
+
+    print("🛠️ Starting Build Process...")
+    for _, block in ipairs(data) do
+        moveTo(block)
+        while not placeBlock(block.block) do
+            print("⚠️ Out of materials! Restocking...")
+        end
+    end
+
+    print("✅ Build complete!")
+end
+
+-- ✅ Start Build Process
+local function startBuild()
+    print("🚀 Starting Build Process...")
+    local blockData = loadBlockData()
+    if blockData then
+        buildSchematic(blockData)
+    else
+        print("❌ ERROR: No valid block data found!")
+        sleep(3)
+        os.shutdown()
+    end
+end
+
+startBuild()
