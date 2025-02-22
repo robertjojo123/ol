@@ -1,0 +1,81 @@
+-- ✅ Placer Turtle Settings
+local blockDataBaseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    while turtle.detect() do
+        print("⏳ Waiting for previous Worker Turtle to be removed...")
+        sleep(2)
+    end
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait until there's space
+    waitForTurtleRemoval()
+
+    -- Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- Wrap the Worker Turtle and confirm it exists
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: Could not detect placed Worker Turtle!")
+        return
+    end
+
+    -- ✅ Write a command inside the Worker Turtle to `wget` the correct `output_X.lua`
+    local wgetScript = [[
+    if fs.exists("output.lua") then fs.delete("output.lua") end
+    print("📥 Downloading block data: ]] .. blockDataBaseUrl .. turtleIndex .. [[.lua")
+    shell.run("wget ]] .. blockDataBaseUrl .. turtleIndex .. [[.lua output.lua")
+    if fs.exists("output.lua") then
+        print("✅ Downloaded block data successfully!")
+    else
+        print("❌ ERROR: Failed to download block data!")
+    end
+    ]]
+    local wgetFile = fs.open("front/wget_blockdata.lua", "w")
+    wgetFile.write(wgetScript)
+    wgetFile.close()
+
+    -- ✅ Create a script inside the Worker Turtle to copy `startup.lua` from the Disk Drive after wget
+    local copyScript = [[
+    shell.run("wget_blockdata.lua")
+    if fs.exists("/disk/startup.lua") then
+        fs.copy("/disk/startup.lua", "/startup")
+        print("✅ Copied `startup.lua` from Disk Drive.")
+    else
+        print("❌ ERROR: No `startup.lua` found on disk!")
+    end
+    os.reboot()
+    ]]
+    local copyFile = fs.open("front/startup", "w")
+    copyFile.write(copyScript)
+    copyFile.close()
+
+    -- ✅ Confirm Worker Turtle can respond before proceeding
+    print("⏳ Waiting for Worker Turtle to acknowledge setup...")
+    sleep(3)
+
+    print("🔄 Worker Turtle setup complete! Rebooting...")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is now running! Waiting for removal before placing the next one...")
+    waitForTurtleRemoval() -- Wait before placing the next Turtle
+end
+
+print("🎉 All Worker Turtles deployed!")
