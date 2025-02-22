@@ -1,0 +1,52 @@
+-- ✅ Placer Turtle Settings
+local blockDataBaseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    while turtle.detect() do
+        print("⏳ Waiting for previous Worker Turtle to be removed...")
+        sleep(2)
+    end
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing new Worker Turtle for output_" .. turtleIndex .. ".lua")
+    
+    -- Wait until there's space
+    waitForTurtleRemoval()
+    
+    -- Place the new Worker Turtle
+    turtle.place()
+    
+    -- Wrap the Worker Turtle as a peripheral
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: Could not detect placed Worker Turtle!")
+        return
+    end
+    
+    -- Tell the Worker Turtle to copy `startup.lua` from the Disk Drive next to it
+    print("📂 Instructing Worker Turtle to copy `startup.lua` from the Disk Drive...")
+    worker.run("cp /disk/startup.lua /startup")
+    
+    -- Tell the Worker Turtle to download its unique `output_X.lua`
+    local outputUrl = blockDataBaseUrl .. turtleIndex .. ".lua"
+    print("📥 Instructing Worker Turtle to download block data:", outputUrl)
+    worker.run("wget", outputUrl, "output.lua")
+    
+    -- Power on the Worker Turtle
+    print("🔌 Turning on Worker Turtle!")
+    worker.turnOn()
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is now running! Waiting for removal before placing the next one...")
+    waitForTurtleRemoval() -- Wait before placing the next Turtle
+end
+
+print("🎉 All Worker Turtles deployed!")
