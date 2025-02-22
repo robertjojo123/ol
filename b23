@@ -1,4 +1,27 @@
-local json = require("json") -- JSON library for saving/loading progress
+-- ✅ Simple JSON Encode Function
+local function jsonEncode(tbl)
+    local function serialize(val)
+        if type(val) == "table" then
+            local s = "{"
+            for k, v in pairs(val) do
+                s = s .. '"' .. k .. '":' .. serialize(v) .. ","
+            end
+            return s:sub(1, -2) .. "}"
+        elseif type(val) == "string" then
+            return '"' .. val .. '"'
+        else
+            return tostring(val)
+        end
+    end
+    return serialize(tbl)
+end
+
+-- ✅ Simple JSON Decode Function
+local function jsonDecode(json)
+    local ok, result = pcall(textutils.unserializeJSON, json)
+    return ok and result or nil
+end
+
 
 -- ✅ Define the base URL and number of files to process
 local baseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
