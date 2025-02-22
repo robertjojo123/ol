@@ -1,0 +1,162 @@
+-- ✅ Define the base URL and number of files to process
+local baseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+local totalFiles = 122 -- Total block data files
+
+-- ✅ Position Tracking
+local pos = {x = 0, y = 0, z = 0, dir = 0} -- Turtle's absolute position
+local lastPlacedIndex = 1 -- Tracks last placed block
+local referencePoint = nil -- Build start reference
+
+-- ✅ Forward Declarations (Prevents Nil Errors)
+local waitForFile, downloadBlockData, startBuilding, loadReferencePoint, saveReferencePoint, moveTo, buildSchematic
+
+-- ✅ Simple JSON Encode Function (No External Dependencies)
+local function jsonEncode(tbl)
+    local function serialize(val)
+        if type(val) == "table" then
+            local s = "{"
+            for k, v in pairs(val) do
+                s = s .. '"' .. k .. '":' .. serialize(v) .. ","
+            end
+            return s:sub(1, -2) .. "}"
+        elseif type(val) == "string" then
+            return '"' .. val .. '"'
+        else
+            return tostring(val)
+        end
+    end
+    return serialize(tbl)
+end
+
+-- ✅ Simple JSON Decode Function
+local function jsonDecode(json)
+    local ok, result = pcall(textutils.unserializeJSON, json)
+    return ok and result or nil
+end
+
+-- ✅ Function to Wait for a File Before Continuing
+function waitForFile(fileName)
+    print("📂 Waiting for file:", fileName)
+    while not fs.exists(fileName) do sleep(1) end
+    print("✅ File detected:", fileName)
+end
+
+-- ✅ Function to Load Reference Point
+function loadReferencePoint()
+    if fs.exists("reference.json") then
+        local file = fs.open("reference.json", "r")
+        referencePoint = jsonDecode(file.readAll())
+        file.close()
+    end
+end
+
+-- ✅ Function to Save Reference Point
+function saveReferencePoint()
+    local file = fs.open("reference.json", "w")
+    file.write(jsonEncode(pos))
+    file.close()
+end
+
+-- ✅ Function to Move Turtle to Target Position (GPS-Based)
+function moveTo(target)
+    while pos.x ~= target.x do
+        if pos.x < target.x then while pos.dir ~= 1 do turtle.turnRight() end
+        else while pos.dir ~= 3 do turtle.turnRight() end
+        end
+        turtle.forward()
+    end
+    while pos.z ~= target.z do
+        if pos.z < target.z then while pos.dir ~= 0 do turtle.turnRight() end
+        else while pos.dir ~= 2 do turtle.turnRight() end
+        end
+        turtle.forward()
+    end
+    while pos.y < target.y do turtle.up() end
+    while pos.y > target.y do turtle.down() end
+end
+
+-- ✅ Function to Start the Build Process
+function startBuilding(fileName)
+    loadReferencePoint()
+
+    if not referencePoint then
+        moveTo({x = pos.x, y = pos.y, z = pos.z + 3})
+        saveReferencePoint()
+    end
+
+    print("🏗️ Starting build process with " .. fileName)
+    buildSchematic(fileName)
+end
+
+-- ✅ Function to Load and Execute Block Data
+function buildSchematic(fileName)
+    if not fs.exists(fileName) then
+        print("❌ ERROR: Block data file not found: " .. fileName)
+        return
+    end
+
+    local chunk = loadfile(fileName)
+    if not chunk then
+        print("❌ ERROR: Failed to load file: " .. fileName)
+        return
+    end
+
+    local success, data = pcall(chunk)
+    if not success then
+        print("❌ ERROR: Could not execute file: " .. fileName)
+        return
+    end
+
+    for _, block in ipairs(data) do
+        if block.block and not block.block:match("^minecraft:") then
+            block.block = "minecraft:" .. block.block
+        end
+
+        -- Move to the block's location and place it
+        moveTo({x = block.x, y = block.y, z = block.z})
+        if turtle.getItemCount(1) > 0 then
+            turtle.place()
+            lastPlacedIndex = lastPlacedIndex + 1
+        else
+            print("⚠️ Out of materials! Restock needed.")
+            return
+        end
+    end
+
+    print("✅ Build complete for: " .. fileName)
+end
+
+-- ✅ Function to Download and Process Block Data Sequentially
+function downloadBlockData()
+    for i = 1, totalFiles do
+        local fileName = "output.lua"
+        local fileUrl = baseUrl .. i .. ".lua"
+
+        -- ✅ Delete previous `output.lua` before downloading the next one
+        if fs.exists(fileName) then
+            fs.delete(fileName)
+        end
+
+        print("📥 Downloading block data: " .. fileUrl)
+        shell.run("wget " .. fileUrl .. " " .. fileName)
+
+        -- ✅ Ensure the file was successfully downloaded
+        if fs.exists(fileName) then
+            print("✅ Block data saved as " .. fileName)
+        else
+            print("❌ ERROR: Failed to download " .. fileUrl)
+            return
+        end
+
+        -- ✅ Wait for the file to be properly saved before starting the build
+        waitForFile(fileName)
+
+        -- ✅ Start building with the downloaded file
+        startBuilding(fileName)
+    end
+
+    print("🎉 All block data files processed! Build complete.")
+end
+
+-- ✅ Start the Block Data Download and Building Process
+downloadBlockData()
