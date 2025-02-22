@@ -1,0 +1,167 @@
+-- ✅ Function Declarations
+local waitForFile, loadBlockData, startBuild, buildSchematic, moveTo, saveProgress, refuelTurtle, restock, placeBlock
+
+-- ✅ Position Tracking
+local pos = {x = 0, y = 0, z = 0, dir = 0} -- 0 = +Z (North), 1 = +X (East), 2 = -Z (South), 3 = -X (West)
+local lastPlacedIndex = 1 -- Tracks last placed block
+
+-- ✅ Fuel & Material Chest Locations
+local fuelChest = {x = -9, y = -1, z = -4, dir = 2} 
+local fuelItem = "projecte:aeternus_fuel_block"
+
+local materialChests = {
+    ["minecraft:wool"]  = {{x = -9, y = 0, z = -4, dir = 2}, {x = -9, y = 1, z = -4, dir = 2}},
+    ["minecraft:clay"]  = {{x = -9, y = 2, z = -4, dir = 2}, {x = -9, y = 3, z = -4, dir = 2}},
+    ["minecraft:dirt"]  = {{x = -9, y = 4, z = -4, dir = 2}, {x = -9, y = 5, z = -4, dir = 2}}
+}
+
+-- ✅ Wait for Block Data
+waitForFile = function(fileName)
+    print("📂 Waiting for file:", fileName)
+    while not fs.exists(fileName) do sleep(1) end
+    print("✅ File detected:", fileName)
+end
+
+-- ✅ Load Block Data from `output.lua`
+loadBlockData = function()
+    local chunk = loadfile("output.lua")
+    if chunk then
+        local success, data = pcall(chunk)
+        if success and type(data) == "table" then
+            print("✅ Block data loaded successfully!")
+            return data
+        else
+            print("❌ ERROR: Failed to execute block data!")
+            return nil
+        end
+    else
+        print("❌ ERROR: Could not load output.lua")
+        return nil
+    end
+end
+
+-- ✅ Save Progress After Each Placed Block
+saveProgress = function()
+    local file = fs.open("progress.json", "w")
+    file.write(textutils.serialize({ lastPlacedIndex = lastPlacedIndex }))
+    file.close()
+end
+
+-- ✅ Move to Target Position
+moveTo = function(target)
+    if not target then return end
+    while pos.x ~= target.x do
+        if pos.x < target.x then turtle.turnRight() else turtle.turnLeft() end
+        turtle.forward()
+        pos.x = pos.x + (pos.dir == 1 and 1 or -1)
+    end
+    while pos.z ~= target.z do
+        if pos.z < target.z then turtle.turnLeft() else turtle.turnRight() end
+        turtle.forward()
+        pos.z = pos.z + (pos.dir == 0 and 1 or -1)
+    end
+    while pos.y < target.y do turtle.up(); pos.y = pos.y + 1 end
+    while pos.y > target.y do turtle.down(); pos.y = pos.y - 1 end
+end
+
+-- ✅ Refuel Turtle Using Aeternus Fuel Blocks
+refuelTurtle = function()
+    if turtle.getFuelLevel() >= 1000 then return true end
+    moveTo(fuelChest)
+    turtle.turnLeft()
+    for _ = 1, 2 do
+        if turtle.suck(1) then
+            local item = turtle.getItemDetail()
+            if item and item.name == fuelItem then
+                turtle.refuel()
+            end
+        end
+    end
+    return turtle.getFuelLevel() >= 1000
+end
+
+-- ✅ Restock Blocks from Stacked Chests
+restock = function(block)
+    local blockID = "minecraft:" .. block
+    local chests = materialChests[blockID]
+    if not chests then return false end
+
+    for _, chest in ipairs(chests) do
+        moveTo(chest)
+        turtle.turnLeft()
+        if turtle.suck(64) then return true end
+    end
+    return false
+end
+
+-- ✅ Place Block Below and Move Forward
+placeBlock = function(block)
+    if not refuelTurtle() then return false end
+    local blockID = "minecraft:" .. block
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == blockID then
+            turtle.select(i)
+            if turtle.placeDown() then
+                print("✅ Placed:", blockID)
+                if not turtle.forward() then return false end
+                return true
+            end
+        end
+    end
+    if restock(block) then return placeBlock(block) end
+    return false
+end
+
+-- ✅ Build Process Using Block Data
+buildSchematic = function(data)
+    if not data or #data == 0 then
+        print("❌ ERROR: Block data is empty!")
+        return
+    end
+
+    print("✅ Starting Build Process...")
+    for i = lastPlacedIndex, #data do
+        local block = data[i]
+        if block and block.block and block.x and block.y and block.z then
+            print("🔨 Placing:", block.block, "at", block.x, block.y, block.z)
+            moveTo({x = block.x, y = block.y, z = block.z})
+            if placeBlock(block.block) then
+                lastPlacedIndex = i + 1
+                saveProgress()
+            else
+                print("⚠️ Placement failed. Retrying restock...")
+                if not restock(block.block) then
+                    print("❌ Out of materials! Cannot continue.")
+                    return
+                end
+            end
+        else
+            print("❌ ERROR: Invalid block data format at index", i)
+        end
+    end
+    print("✅ Build complete!")
+end
+
+-- ✅ Start Build Process
+startBuild = function()
+    waitForFile("output.lua")
+    local blockData = loadBlockData()
+    if blockData then
+        buildSchematic(blockData)
+    else
+        print("❌ ERROR: No valid block data found!")
+    end
+end
+
+-- ✅ Load Progress Before Starting
+if fs.exists("progress.json") then
+    local file = fs.open("progress.json", "r")
+    local data = textutils.unserialize(file.readAll())
+    file.close()
+    lastPlacedIndex = data.lastPlacedIndex or 1
+    print("🔄 Resuming from Block:", lastPlacedIndex)
+end
+
+-- ✅ Ensure Build Starts Automatically
+startBuild()
