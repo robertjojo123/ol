@@ -1,0 +1,145 @@
+-- ✅ Debugging Startup
+print("🚀 Worker Turtle Booting Up...")
+
+-- ✅ Function: Get the correct block data index
+local function getBlockDataIndex()
+    local filename = "block_data_index.txt"
+    if fs.exists(filename) then
+        local file = fs.open(filename, "r")
+        local index = tonumber(file.readAll())
+        file.close()
+        return index
+    else
+        print("❌ ERROR: No block data index found!")
+        sleep(3)
+        os.shutdown()
+    end
+end
+
+-- ✅ Function: Download `output.lua` if missing
+local function checkForOutputFile()
+    if not fs.exists("output.lua") then
+        print("📥 `output.lua` missing, downloading...")
+
+        local index = getBlockDataIndex()
+        local blockDataBaseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+        local downloadCommand = "wget " .. blockDataBaseUrl .. index .. ".lua output.lua"
+
+        shell.run(downloadCommand)
+
+        if not fs.exists("output.lua") then
+            print("❌ ERROR: Failed to download `output.lua`! Shutting down.")
+            sleep(3)
+            os.shutdown()
+        else
+            print("✅ Successfully downloaded `output.lua`!")
+        end
+    else
+        print("✅ `output.lua` detected!")
+    end
+end
+
+-- ✅ Load Block Data from `output.lua`
+local function loadBlockData()
+    checkForOutputFile()
+    print("📥 Loading `output.lua`...")
+
+    local chunk = loadfile("output.lua")
+    if chunk then
+        local success, data = pcall(chunk)
+        if success and type(data) == "table" then
+            print("✅ Block data loaded successfully!")
+            return data
+        end
+    end
+
+    print("❌ ERROR: Could not load output.lua")
+    sleep(3)
+    os.shutdown()
+    return nil
+end
+
+-- ✅ Movement Functions
+local pos = {x = -5, y = 0, z = 0, dir = 0}
+local function moveTo(target)
+    if not target then return false end
+    print("🚶 Moving to:", "X=" .. target.x, "Y=" .. target.y, "Z=" .. target.z)
+
+    while pos.x ~= target.x do
+        if pos.x < target.x then turtle.turnRight() else turtle.turnLeft() end
+        if turtle.forward() then
+            pos.x = pos.x + (pos.dir == 1 and 1 or -1)
+        else
+            print("⛔ Blocked! Can't move forward.")
+            return false
+        end
+    end
+
+    print("✅ Arrived at destination.")
+    return true
+end
+
+-- ✅ Place Block Function
+local function placeBlock(block)
+    local blockID = "minecraft:" .. block
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == blockID then
+            turtle.select(i)
+            if turtle.placeDown() then
+                print("✅ Placed:", blockID)
+                if not turtle.forward() then return false end
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ✅ Build Process
+local function buildSchematic(data)
+    if not data or #data == 0 then
+        print("❌ ERROR: Block data is empty!")
+        sleep(3)
+        os.shutdown()
+        return
+    end
+
+    print("🛠️ Starting Build Process...")
+
+    for _, block in ipairs(data) do
+        if block and block.block then
+            print("🔨 Placing:", block.block, "at", block.x, block.y, block.z)
+            if moveTo({x = block.x, y = block.y, z = block.z}) then
+                if placeBlock(block.block) then
+                    print("✅ Successfully placed " .. block.block)
+                else
+                    print("⚠️ Failed to place " .. block.block .. ", retrying...")
+                    sleep(2)
+                end
+            else
+                print("⚠️ Can't reach " .. block.x .. ", " .. block.y .. ", " .. block.z)
+            end
+        end
+    end
+
+    print("✅ Build complete!")
+end
+
+-- ✅ Start Build Process
+local function startBuild()
+    print("🚀 Starting Build Process...")
+    local blockData = loadBlockData()
+    if blockData then
+        buildSchematic(blockData)
+    else
+        print("❌ ERROR: No valid block data found!")
+        sleep(3)
+        os.shutdown()
+    end
+
+    print("🔴 Build complete. Shutting down...")
+    os.shutdown()
+end
+
+startBuild()
