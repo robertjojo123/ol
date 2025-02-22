@@ -1,0 +1,129 @@
+-- ✅ Function Declarations
+local waitForFile, loadBlockData, startBuild, buildSchematic, moveTo, saveProgress, refuelTurtle, restock, placeBlock
+
+-- ✅ Position Tracking (Default Start Position)
+local pos = {x = -5, y = 0, z = 0, dir = 0} -- Set to a fixed starting position
+local lastPlacedIndex = 1 -- Tracks last placed block
+
+-- ✅ Fuel & Material Chest Locations
+local fuelChest = {x = -9, y = -1, z = -4, dir = 2} 
+local fuelItem = "projecte:aeternus_fuel_block"
+
+local materialChests = {
+    ["minecraft:wool"]  = {{x = -9, y = 0, z = -4, dir = 2}, {x = -9, y = 1, z = -4, dir = 2}},
+    ["minecraft:clay"]  = {{x = -9, y = 2, z = -4, dir = 2}, {x = -9, y = 3, z = -4, dir = 2}},
+    ["minecraft:dirt"]  = {{x = -9, y = 4, z = -4, dir = 2}, {x = -9, y = 5, z = -4, dir = 2}}
+}
+
+-- ✅ Load Block Data
+loadBlockData = function()
+    local chunk = loadfile("output.lua")
+    if chunk then
+        local success, data = pcall(chunk)
+        if success and type(data) == "table" then
+            print("✅ Block data loaded successfully!")
+            return data
+        end
+    end
+    print("❌ ERROR: Could not load output.lua")
+    return nil
+end
+
+-- ✅ Save Progress
+saveProgress = function()
+    local file = fs.open("progress.json", "w")
+    file.write(textutils.serialize({ lastPlacedIndex = lastPlacedIndex }))
+    file.close()
+end
+
+-- ✅ Move to Target Position
+moveTo = function(target)
+    if not target then return end
+    while pos.x ~= target.x do
+        if pos.x < target.x then turtle.turnRight() else turtle.turnLeft() end
+        turtle.forward()
+        pos.x = pos.x + (pos.dir == 1 and 1 or -1)
+    end
+    while pos.z ~= target.z do
+        if pos.z < target.z then turtle.turnLeft() else turtle.turnRight() end
+        turtle.forward()
+        pos.z = pos.z + (pos.dir == 0 and 1 or -1)
+    end
+    while pos.y < target.y do turtle.up(); pos.y = pos.y + 1 end
+    while pos.y > target.y do turtle.down(); pos.y = pos.y - 1 end
+end
+
+-- ✅ Refuel Turtle Using Aeternus Fuel Blocks
+refuelTurtle = function()
+    if turtle.getFuelLevel() >= 1000 then return true end
+    moveTo(fuelChest)
+    turtle.turnLeft()
+    for _ = 1, 2 do
+        if turtle.suck(1) then
+            local item = turtle.getItemDetail()
+            if item and item.name == fuelItem then
+                turtle.refuel()
+            end
+        end
+    end
+    return turtle.getFuelLevel() >= 1000
+end
+
+-- ✅ Place Block Below and Move Forward
+placeBlock = function(block)
+    if not refuelTurtle() then return false end
+    local blockID = "minecraft:" .. block
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == blockID then
+            turtle.select(i)
+            if turtle.placeDown() then
+                print("✅ Placed:", blockID)
+                if not turtle.forward() then return false end
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ✅ Build Process Using Block Data
+buildSchematic = function(data)
+    if not data or #data == 0 then
+        print("❌ ERROR: Block data is empty!")
+        return
+    end
+
+    print("✅ Starting Build Process...")
+    for i = lastPlacedIndex, #data do
+        local block = data[i]
+        if block and block.block then
+            print("🔨 Placing:", block.block, "at", block.x, block.y, block.z)
+            moveTo({x = block.x, y = block.y, z = block.z})
+            if placeBlock(block.block) then
+                lastPlacedIndex = i + 1
+                saveProgress()
+            else
+                print("⚠️ Out of materials or fuel! Build halted.")
+                return
+            end
+        end
+    end
+    print("✅ Build complete!")
+end
+
+-- ✅ Start Build Process
+startBuild = function()
+    local blockData = loadBlockData()
+    if blockData then
+        buildSchematic(blockData)
+    else
+        print("❌ ERROR: No valid block data found!")
+    end
+
+    print("🔴 Build complete. Shutting down...")
+    os.shutdown()
+end
+
+-- ✅ Ensure Build Starts Automatically
+startBuild()
