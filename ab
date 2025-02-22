@@ -1,0 +1,66 @@
+-- ✅ Placer Turtle Settings
+local totalFiles = 122
+local startIndex = 1
+
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    while turtle.detect() do
+        print("⏳ Waiting for previous Worker Turtle to be removed...")
+        sleep(2)
+    end
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait until there's space
+    waitForTurtleRemoval()
+
+    -- Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- ✅ Ensure Worker Turtle exists before proceeding
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: Worker Turtle not detected! Aborting...")
+        return
+    end
+
+    -- ✅ Create `block_data_index.txt` inside Worker Turtle
+    print("📂 Assigning Block Data Index:", turtleIndex)
+    local indexFile = fs.open("front/block_data_index.txt", "w")
+    indexFile.write(tostring(turtleIndex))
+    indexFile.close()
+
+    -- ✅ Copy `startup.lua` from Disk Drive
+    print("📂 Copying `startup.lua` to Worker Turtle...")
+    if not worker.run("cp /disk/startup.lua /startup") then
+        print("❌ ERROR: Worker Turtle failed to copy `startup.lua` from Disk!")
+        return
+    end
+
+    -- ✅ Reboot Worker Turtle
+    print("🔄 Rebooting Worker Turtle...")
+    if not worker.run("os.reboot()") then
+        print("❌ ERROR: Worker Turtle failed to reboot!")
+        return
+    end
+
+    print("✅ Worker Turtle setup complete!")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is now running! Waiting for removal before placing the next one...")
+    waitForTurtleRemoval()
+end
+
+print("🎉 All Worker Turtles deployed!")
