@@ -1,0 +1,64 @@
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    print("⏳ Waiting for previous Worker Turtle to be removed...")
+    while turtle.detect() do
+        sleep(2)
+    end
+    print("✅ Worker Turtle removed! Placing next one.")
+end
+
+-- ✅ Function: Assign Block Index to Disk Drive
+local function assignBlockIndex(index)
+    -- Check if a Disk Drive is present
+    local diskDrive = peripheral.find("drive")
+    if not diskDrive then
+        print("❌ ERROR: No Disk Drive detected! Place a Disk Drive near the Worker Turtle.")
+        return false
+    end
+
+    -- Write the index to a file on the Disk
+    print("📝 Assigning Block Data Index:", index)
+    local file = fs.open("/disk/block_index.txt", "w")
+    file.write(index)
+    file.close()
+
+    return true
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait for space before placing
+    waitForTurtleRemoval()
+
+    -- ✅ Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- ✅ Assign the block index to the Disk Drive
+    if not assignBlockIndex(turtleIndex) then
+        print("❌ ERROR: Block index assignment failed. Shutting down Worker Turtle.")
+        return
+    end
+
+    -- ✅ Turn On Worker Turtle (it will run the startup program from the Disk)
+    print("🔄 Turning on Worker Turtle...")
+    peripheral.call("front", "turnOn")
+
+    print("✅ Worker Turtle setup complete! Waiting for next one to be removed...")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+local totalFiles = 122
+
+for i = 1, totalFiles do
+    deployWorker(i)
+end
+
+print("🎉 All Worker Turtles deployed!")
