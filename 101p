@@ -1,0 +1,60 @@
+-- ✅ Function: Wait for Previous Worker Turtle to be Removed
+local function waitForTurtleRemoval()
+    print("⏳ Waiting for previous Worker Turtle to be removed...")
+    while turtle.detect() do
+        sleep(2)
+    end
+    print("✅ Worker Turtle removed! Placing next one.")
+end
+
+-- ✅ Function: Place and Setup New Worker Turtle
+local function deployWorker(turtleIndex)
+    print("📦 Placing Worker Turtle for `output_" .. turtleIndex .. ".lua`")
+
+    -- Wait for space before placing
+    waitForTurtleRemoval()
+
+    -- ✅ Place the Worker Turtle
+    if not turtle.place() then
+        print("❌ ERROR: Failed to place Worker Turtle!")
+        return
+    end
+
+    -- Sleep to allow Turtle to initialize
+    sleep(2)
+
+    -- ✅ Wrap the Turtle as a Peripheral
+    local worker = peripheral.wrap("front")
+    if not worker then
+        print("❌ ERROR: No Worker Turtle detected after placement!")
+        return
+    end
+
+    -- ✅ Write the index to a file on the Worker Turtle
+    local indexString = tostring(turtleIndex)
+    print("📡 Assigning Block Data Index:", indexString)
+    worker.run("rm /block_index.txt") -- Remove any previous index
+    worker.run("echo " .. indexString .. " > /block_index.txt")
+
+    -- ✅ Copy necessary files from Disk Drive
+    print("📂 Copying files from Disk Drive to Worker Turtle...")
+    worker.run("cp /disk/startup.lua /startup")
+    worker.run("cp /disk/build.lua /build.lua")
+
+    -- ✅ Tell the Worker Turtle to reboot
+    print("🔄 Rebooting Worker Turtle to start...")
+    worker.run("reboot")
+
+    print("✅ Worker Turtle setup complete!")
+end
+
+-- ✅ Main Loop: Deploy Worker Turtles Sequentially
+local totalFiles = 122
+local startIndex = 1
+
+for i = startIndex, totalFiles do
+    deployWorker(i)
+    print("✅ Worker Turtle #" .. i .. " is running! Waiting for removal before placing the next one...")
+end
+
+print("🎉 All Worker Turtles deployed!")
