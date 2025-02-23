@@ -1,0 +1,130 @@
+-- ✅ Function Forward Declarations
+local moveTo, accessChest, refuelTurtle, restock, placeBlock, loadBlockData, buildSchematic, startBuild
+
+-- ✅ Position Tracking
+local pos = {x = -5, y = 0, z = 0, dir = 0}
+local lastPlacedIndex = 1
+local lastPos = {x = 0, y = 0, z = 0, dir = 0} -- Store last position before restocking
+
+-- ✅ Fuel & Material Chest Locations
+local fuelChest = {x = -9, y = -1, z = -4} 
+local fuelItem = "projecte:aeternus_fuel_block"
+
+local materialChests = {
+    ["minecraft:wool"]  = {{x = -9, y = 0, z = -4}, {x = -9, y = 1, z = -4}},
+    ["minecraft:clay"]  = {{x = -9, y = 2, z = -4}, {x = -9, y = 3, z = -4}},
+    ["minecraft:dirt"]  = {{x = -9, y = 4, z = -4}, {x = -9, y = 5, z = -4}}
+}
+
+-- ✅ Debugging Startup
+print("🚀 Worker Turtle Booting Up...")
+
+-- ✅ Read Block Data Index from Assigned File
+local blockDataIndex = nil
+if fs.exists("/block_index.txt") then
+    local file = fs.open("/block_index.txt", "r")
+    blockDataIndex = tonumber(file.readAll())
+    file.close()
+end
+
+if not blockDataIndex then
+    print("❌ ERROR: No Block Data Index found! Shutting down.")
+    sleep(3)
+    os.shutdown()
+end
+
+print("📂 Using Block Data Index:", blockDataIndex)
+
+-- ✅ Download `output.lua` using the received index
+print("📥 Downloading `output_" .. blockDataIndex .. ".lua`...")
+local blockDataBaseUrl = "https://raw.githubusercontent.com/robertjojo123/olympus2/refs/heads/main/output_"
+shell.run("wget " .. blockDataBaseUrl .. blockDataIndex .. ".lua output.lua")
+
+if not fs.exists("output.lua") then
+    print("❌ ERROR: Failed to download `output.lua`! Shutting down.")
+    sleep(3)
+    os.shutdown()
+else
+    print("✅ Successfully downloaded `output.lua`!")
+end
+
+-- ✅ Move to Target Position
+moveTo = function(target)
+    while pos.x ~= target.x do
+        if pos.x < target.x then turtle.turnRight() else turtle.turnLeft() end
+        if turtle.forward() then pos.x = pos.x + (pos.dir == 1 and 1 or -1) end
+    end
+
+    while pos.z ~= target.z do
+        if pos.z < target.z then turtle.turnLeft() else turtle.turnRight() end
+        if turtle.forward() then pos.z = pos.z + (pos.dir == 0 and 1 or -1) end
+    end
+
+    print("✅ Arrived at target.")
+    return true
+end
+
+-- ✅ Smart Restocking Function (Tries Different Chest Sides)
+accessChest = function(chestPos)
+    local accessPoints = {
+        {x = chestPos.x + 1, y = chestPos.y, z = chestPos.z}, -- Right
+        {x = chestPos.x - 1, y = chestPos.y, z = chestPos.z}, -- Left
+        {x = chestPos.x, y = chestPos.y, z = chestPos.z + 1}, -- Front
+        {x = chestPos.x, y = chestPos.y, z = chestPos.z - 1}  -- Back
+    }
+
+    for _, point in ipairs(accessPoints) do
+        moveTo(point)
+
+        -- Try to access chest
+        if turtle.suck(64) then
+            print("✅ Accessed chest successfully!")
+            return true
+        end
+    end
+
+    print("❌ ERROR: Chest access failed, all sides blocked.")
+    return false
+end
+
+-- ✅ Refuel Turtle
+refuelTurtle = function()
+    moveTo(fuelChest)
+    return accessChest(fuelChest)
+end
+
+-- ✅ Restock Materials
+restock = function(block)
+    for _, chest in ipairs(materialChests["minecraft:" .. block] or {}) do
+        if accessChest(chest) then return true end
+    end
+    return false
+end
+
+-- ✅ Place Block
+placeBlock = function(block)
+    if not restock(block) then return false end
+
+    for i = 1, 16 do
+        local item = turtle.getItemDetail(i)
+        if item and item.name == "minecraft:" .. block then
+            turtle.select(i)
+            if turtle.placeDown() then
+                print("✅ Placed " .. block)
+                return true
+            end
+        end
+    end
+
+    print("❌ ERROR: Could not place " .. block)
+    return false
+end
+
+-- ✅ Start Build Process
+startBuild = function()
+    print("🚀 Starting Build Process...")
+    shell.run("build.lua")
+    os.shutdown()
+end
+
+startBuild()
